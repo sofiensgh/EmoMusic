@@ -41,6 +41,10 @@ def main():
     p.add_argument("--batch", type=int, default=128)
     p.add_argument("--lr", type=float, default=2e-3)
     p.add_argument("--hidden", type=int, default=256)
+    p.add_argument("--dropout", type=float, default=0.3)
+    p.add_argument("--wd", type=float, default=1e-4, help="AdamW weight decay")
+    p.add_argument("--stride", type=int, default=4, help="step between training windows (bigger = fewer near-duplicates)")
+    p.add_argument("--patience", type=int, default=0, help="stop after N epochs without val improvement (0 = off)")
     p.add_argument("--out", default=str(MELODY_CKPT))
     a = p.parse_args()
 
@@ -53,13 +57,13 @@ def main():
     train, val = [], []
     for s, m, pid in zip(data["sequences"], data["moods"], pieces):
         (val if pid in val_ids else train).append((s, m))
-    train_ds, val_ds = Windows(*zip(*train)), Windows(*zip(*val), stride=SEQ_LEN)
+    train_ds, val_ds = Windows(*zip(*train), stride=a.stride), Windows(*zip(*val), stride=SEQ_LEN)
     print(f"device {device} | train windows {len(train_ds)} | val windows {len(val_ds)}")
     train_dl = DataLoader(train_ds, a.batch, shuffle=True, drop_last=len(train_ds) > a.batch)
     val_dl = DataLoader(val_ds, a.batch)
 
-    model = MelodyLSTM(hidden=a.hidden).to(device)
-    opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
+    model = MelodyLSTM(hidden=a.hidden, dropout=a.dropout).to(device)
+    opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=a.wd)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=a.epochs)
     loss_fn = nn.CrossEntropyLoss()
 
@@ -74,7 +78,7 @@ def main():
                 n += len(x)
         return tot / max(n, 1)
 
-    hist_t, hist_v, best = [], [], float("inf")
+    hist_t, hist_v, best, since_best = [], [], float("inf"), 0
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     for ep in range(1, a.epochs + 1):
         model.train()
@@ -94,10 +98,16 @@ def main():
         hist_t.append(tl); hist_v.append(vl)
         flag = ""
         if vl < best:
-            best = vl
+            best, since_best = vl, 0
             torch.save({"hparams": model.hparams, "state_dict": model.state_dict(), "val_loss": vl}, a.out)
             flag = "  * saved"
-        print(f"ep {ep:3d}  loss {tl:.3f}/{vl:.3f}  val perplexity {math.exp(vl):6.1f}  {time.time() - t0:.0f}s{flag}")
+        else:
+            since_best += 1
+        print(f"ep {ep:3d}  loss {tl:.3f}/{vl:.3f}  val perplexity {math.exp(vl):6.1f}  {time.time() - t0:.0f}s{flag}",
+              flush=True)
+        if a.patience and since_best >= a.patience:
+            print(f"early stop: no improvement for {a.patience} epochs")
+            break
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     plt.figure(figsize=(6, 4))

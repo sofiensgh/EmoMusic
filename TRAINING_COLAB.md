@@ -70,6 +70,39 @@ choose the right country code, or the SMS goes to the wrong country).
    `--data` must point to the folder that contains `train/` and `test/`.
 5. Download `models/emotion_cnn.pth` from the **Output** panel and put it in `EmoMusic/models/`.
 
+## Training the melody LSTM (EMOPIA) on Colab
+
+The first CPU run overfitted after epoch 2 (best val perplexity 44.0), so this run adds regularisation
+(more dropout, stronger weight decay, fewer overlapping windows) and early stopping.
+In the same Colab notebook (GPU on), after the emotion training has finished:
+
+```python
+!pip -q install pretty_midi
+
+# skip these two lines if the repo is already cloned in this session
+!git clone https://github.com/sofiensgh/EmoMusic.git
+%cd EmoMusic
+
+# EMOPIA 1.0 from Zenodo (5.5 MB)
+!wget -q -O EMOPIA.zip "https://zenodo.org/records/5090631/files/EMOPIA_1.0.zip?download=1"
+!unzip -q -o EMOPIA.zip -d data
+!ls data                          # should show EMOPIA_1.0
+
+!python -m src.build_music_dataset --emopia data/EMOPIA_1.0/midis
+!python -m src.train_melody --epochs 40 --batch 256 --dropout 0.5 --wd 0.01 --stride 8 --patience 6
+```
+
+Then download the model and the curves:
+
+```python
+from google.colab import files
+files.download("models/melody_lstm.pth")
+files.download("output/melody_training_curves.png")
+```
+
+Put `melody_lstm.pth` in `EmoMusic/models/` (it replaces the CPU model; keep the old file
+if its val perplexity, 44.0, is lower than the new run's best).
+
 ## Reading the log
 
 Each epoch prints a line like:
