@@ -1,0 +1,13 @@
+# For GPU training install torch from https://pytorch.org (pick your CUDA version)
+torch
+torchvision
+opencv-python
+numpy
+pandas
+matplotlib
+pillow
+pretty_midi
+streamlit
+# Face Orchestra
+mediapipe
+sounddevice

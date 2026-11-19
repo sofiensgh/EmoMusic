@@ -1,0 +1,19 @@
+# environment
+.venv/
+__pycache__/
+*.pyc
+
+# datasets (too large; see README / TRAINING_COLAB.md for download links)
+data/
+
+# trained weights and downloaded models
+models/
+
+# generated audio, MIDI, plots, logs
+output/
+
+# build artefacts
+emomusic_src.zip
+
+# local tool settings
+.claude/settings.local.json
